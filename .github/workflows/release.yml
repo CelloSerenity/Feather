@@ -6,6 +6,9 @@ on:
 jobs:
   build:
     runs-on: macos-26
+    env:
+      OTHER_SWIFT_FLAGS: -D NIGHTLY
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: NIGHTLY
     steps:
       - name: Checkout
         uses: actions/checkout@v3

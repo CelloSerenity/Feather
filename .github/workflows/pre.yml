@@ -1,0 +1,65 @@
+name: Create New Release
+
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  build:
+    runs-on: macos-26
+    env:
+      OTHER_SWIFT_FLAGS: -D NIGHTLY
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: NIGHTLY
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: 'true'
+      
+      - name: Use Xcode 26.2
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
+
+      - name: Compile Feather
+        run: | 
+          agvtool new-version -all $(git rev-parse HEAD)
+          make
+          mkdir upload
+          mv packages/* upload/
+
+      - name: Get Version
+        id: get_version
+        run: |
+          VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" Payload/*.app/Info.plist)
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+
+      - name: Get Commit Hash and Prepare Release Notes
+        id: prepare_notes
+        run: |
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          COMMIT_SUBJECT=$(git log -1 --pretty=format:"%s")
+          COMMIT_BODY=$(git log -1 --pretty=format:"%b")
+          echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
+          echo "RELEASE_BODY<<EOF" >> $GITHUB_ENV
+          echo "Commit: ${COMMIT_HASH}" >> $GITHUB_ENV
+          echo "" >> $GITHUB_ENV
+          echo "${COMMIT_SUBJECT}" >> $GITHUB_ENV
+          if [ -n "${COMMIT_BODY}" ]; then
+            echo "" >> $GITHUB_ENV
+            echo "${COMMIT_BODY}" >> $GITHUB_ENV
+          fi
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Feather v${{ env.VERSION }}
+          tag_name: v${{ env.VERSION }}
+          body: ${{ env.RELEASE_BODY }}
+          files: |
+            upload/*ipa
+          generate_release_notes: false
+          fail_on_unmatched_files: true
+          draft: true
+        env:
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
